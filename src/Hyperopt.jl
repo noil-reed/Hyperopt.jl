@@ -1,7 +1,7 @@
 module Hyperopt
 
 export Hyperoptimizer, @hyperopt, @phyperopt, @thyperopt, printmin, printmax
-export RandomSampler, BlueNoiseSampler, LHSampler, CLHSampler, Continuous, Categorical, GPSampler, Max, Min, Hyperband
+export RandomSampler, BlueNoiseSampler, LHSampler, CLHSampler, Continuous, Categorical, UnorderedCategorical, GPSampler, Max, Min, Hyperband, BOHB
 
 using Base.Threads: threadid, nthreads
 using LinearAlgebra, Statistics, Random
@@ -13,8 +13,15 @@ using Distributed
 using LatinHypercubeSampling
 using BayesianOptimization, GaussianProcesses
 using ThreadPools
+using Distributions: TruncatedNormal
 
 const HO_RNG = [MersenneTwister(rand(1:1000)) for _ in 1:nthreads()]
+const RealVector = Vector{Real}
+const RealVectorVector = Vector{Vector{Real}}
+const DimensionType = LHCDimension
+struct UnorderedCategorical <: DimensionType
+    levels::Int64
+end
 
 abstract type Sampler end
 Base.@kwdef mutable struct Hyperoptimizer{S<:Sampler, F}
@@ -37,6 +44,7 @@ end
 
 Base.propertynames(ho::Hyperoptimizer) = (:minimum, :minimizer, :maximum, :maximizer, fieldnames(Hyperoptimizer)...)
 
+include("multi_lkde.jl")
 include("samplers.jl")
 
 function Hyperoptimizer(iterations::Int, sampler::Sampler = RandomSampler(); kwargs...)
@@ -125,6 +133,7 @@ end
 
 macro hyperopt(ex)
     pre = preprocess_expression(ex)
+    # print(pre)
     if pre[3].args[1] === :Hyperband
         costfun_ = hyperband_costfun(ex, pre...)
         ho_ = create_ho(pre[1:4]..., costfun_)

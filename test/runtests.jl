@@ -35,8 +35,11 @@ f(a,b=true;c=10) = sum(@. 100 + (a-3)^2 + (b ? 10 : 20) + (c-100)^2) # This func
 
     end
 
+    print(1)
     @testset "Latin hypercube" begin
+        print(2)
         @info "Testing Latin hypercube"
+        print(3)
         hol = @hyperopt for i=100, sampler=LHSampler(), a = LinRange(1,5,100), b = repeat([true, false],50), c = exp10.(LinRange(-1,3,100))
             # println(i, "\t", a, "\t", b, "\t", c)
             f(a,b,c=c)
@@ -314,4 +317,6 @@ f(a,b=true;c=10) = sum(@. 100 + (a-3)^2 + (b ? 10 : 20) + (c-100)^2) # This func
 
     end
 
+    include("BOHB.jl")
+    include("multi_lkde.jl")
 end
