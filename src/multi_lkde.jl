@@ -61,8 +61,13 @@ Base.@kwdef mutable struct LazyKDE
     is_number::Bool
 end
 
-function pdf(kde::LazyKDE, x::Real)
-    kde.kernel(kde.bandwidth, kde.data, x)
+function pdf(kde::LazyKDE, x::Real; keep_all=true)
+    densities = kde.kernel(kde.bandwidth, kde.data, x)
+    if keep_all
+        return densities
+    else
+        return mean(densities) / kde.bandwidth
+    end
 end
 
 # Multivariate KDE based on LazyKDE
@@ -74,35 +79,46 @@ Base.@kwdef mutable struct MultivariateKDE
     # observations: An k*n matrix, where k is dimension of KDEs and n is number of observations
     observations::RealVectorVector
     mat_observations::Matrix
-    # If any dimension D_i is UnorderedCategorical, which means it is possible be any type other than real number.
-    # bws::Vector{R} where R<:Real
     # In such case, we assign an index 1:N to every value, where N=|D_i|, then we pass the 1:N to KDE
     unordered_to_index::Dict{LazyKDE, Dict{Any, Real}}
     index_to_unordered::Dict{LazyKDE, Dict{Real, Any}}
 end
-# function MultivariateKDE(dims::Vector{DimensionType}, observations::Vector{Vector{T}} where T<:Real)
-function MultivariateKDE(dims::Vector{DimensionType}, observations::Vector{Vector}, candidates::Tuple)
+# Constructor without candidates
+function MultivariateKDE(dims::Vector{DimensionType}, observations::Vector{Vector{T}} where T)
+    MultivariateKDE(dims, nothing, convert(Vector{Vector}, observations))
+end
+function MultivariateKDE(dims::Vector{DimensionType}, observations::Vector{Vector})
+    MultivariateKDE(dims, nothing, observations)
+end
+function MultivariateKDE(dims::Vector{DimensionType}, bws::Union{Vector{T} where T<:Real, Nothing}, observations::Vector{Vector{T}} where T)
+    MultivariateKDE(dims, bws, convert(Vector{Vector}, observations))
+end
+function MultivariateKDE(dims::Vector{DimensionType}, bws::Union{Vector{T} where T<:Real, Nothing}, observations::Vector{Vector})
+    for (dim_type, observation) in zip(dims, observations)
+        if dim_type isa UnorderedCategorical && !(observation[1] isa Real)
+            error("If there is Uncatogorical dimension and not a number, should specify its candidate value.")
+        end
+    end
+    MultivariateKDE(dims, bws, observations, nothing)
+end
+# Constructor with candidates
+function MultivariateKDE(dims::Vector{DimensionType}, observations::Vector{Vector}, candidates::Union{Dict{Int, Vector}, Nothing})
     MultivariateKDE(dims, nothing, observations, candidates)
 end
-function MultivariateKDE(dims::Vector{DimensionType}, bws::Union{Vector{T} where T<:Real, Nothing}, observations::Vector{Vector}, candidates::Tuple)
+function MultivariateKDE(dims::Vector{DimensionType}, bws::Union{Vector{T} where T<:Real, Nothing}, observations::Vector{Vector}, candidates::Union{Dict{Int, Vector}, Nothing})
     mat_observations = hcat(observations...)
     MultivariateKDE(dims, bws, mat_observations, candidates)
 end
-function MultivariateKDE(dims::Vector{DimensionType}, bws::Union{Vector{T} where T<:Real, Nothing}, observations::Vector{Vector{T}} where T, candidates::Tuple)
+function MultivariateKDE(dims::Vector{DimensionType}, bws::Union{Vector{T} where T<:Real, Nothing}, observations::Vector{Vector{T}} where T, candidates::Union{Dict{Int, Vector}, Nothing})
     MultivariateKDE(dims, bws, convert(Vector{Vector}, observations), candidates)
 end
-function MultivariateKDE(dims::Vector{DimensionType}, observations::Matrix)
-    MultivariateKDE(dims, nothing, observations, candidates)
-end
 # Constructor with default bandwidth
-function MultivariateKDE(dims::Vector{DimensionType}, bws::Union{Vector{T} where T<:Real, Nothing}, mat_observations::Matrix, candidates::Tuple)
+function MultivariateKDE(dims::Vector{DimensionType}, bws::Union{Vector{T} where T<:Real, Nothing}, mat_observations::Matrix, candidates::Union{Dict{Int, Vector}, Nothing})
     _KDEs, _observations, _unordered_to_index, _index_to_unordered = Vector{LazyKDE}(), RealVectorVector(), Dict{Int, Dict{Any, Real}}(), 
                                                                             Dict{Int, Dict{Real, Any}}()
     is_numbers = Vector{Bool}()
-    # print(size(observations))
     for (i, dim_type_i) in zip(1:size(mat_observations)[1], dims)
         _observations_i = mat_observations[i, :]
-        # println(_observations_i[1])
         if (dim_type_i isa UnorderedCategorical && !(_observations_i[1] isa Real))
             _unordered_to_index_i, _index_to_unordered_i = create_unordered_map(candidates[i])
             _unordered_to_index[i], _index_to_unordered[i] = _unordered_to_index_i, _index_to_unordered_i
@@ -141,7 +157,6 @@ function gpke(multi_kde::MultivariateKDE, x::Vector)
         Kval[:, i] = pdf(_kde, _x)
     end
     iscontinuous = [_dim isa Continuous ? true : false for _dim in multi_kde.dims]
-    # dens = prod(Kval, dims=2) / prod(multi_kde.bws[iscontinuous])
     dens = prod(Kval, dims=2) / prod([kde.bandwidth for kde in multi_kde.KDEs][iscontinuous])
     sum(dens)
 end

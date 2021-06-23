@@ -416,6 +416,16 @@ function sample_potential_hyperparam(kde::MultivariateKDE, min_bandwidth, bw_fac
     sample
 end
 
+function get_dict_candidates(dim_types::Vector{DimensionType}, candidates::Tuple)
+    dict_candidates = Dict{Int, Vector}()
+    for (i, dim_type, candidate) in zip(1:length(dim_types), dim_types, candidates)
+        if dim_type isa UnorderedCategorical && !(candidate[1] isa Real)
+            dict_candidates[i] = candidate
+        end
+    end
+    dict_candidates
+end
+
 # Get MultivariateKDE with min_bandwidth
 function MultivariateKDE(dim_types::Vector{DimensionType}, records::Vector{ObservationsRecord}, min_bandwidth::Real, candidates::Tuple)
     dim = records[1].dim
@@ -429,6 +439,7 @@ function MultivariateKDE(dim_types::Vector{DimensionType}, records::Vector{Obser
         push!(observations, _observations)
     end
     # bws = [max(min_bandwidth, KernelDensity.default_bandwidth(observations[i, :])) for i in 1:size(observations)[1]]
+    candidates = get_dict_candidates(dim_types, candidates)
     multi_kde = MultivariateKDE(dim_types, observations, candidates)
     for i in 1:length(multi_kde.KDEs)
         if multi_kde.KDEs[i].bandwidth < min_bandwidth

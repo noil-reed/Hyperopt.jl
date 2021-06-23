@@ -42,7 +42,6 @@ using Optim
         Optim.minimum(res), (Optim.minimizer(res)..., algorithm)
     end
     
-    bohb_results = []
     bohb = @hyperopt for i=18, sampler=Hyperband(R=50, η=3, inner=RandomSampler()),
         algorithm = [SimulatedAnnealing(), ParticleSwarm(), NelderMead(), BFGS(), NewtonTrustRegion()],
         a = LinRange(1,5,1800),
@@ -54,8 +53,7 @@ using Optim
         res = Optim.optimize(x->f(x[1],c=x[2]), [a,c], algorithm, Optim.Options(time_limit=2i+2, show_trace=false, show_every=5))
         Optim.minimum(res), (Optim.minimizer(res)..., algorithm)
     end
-
-    ho_results = []
+    
     ho = @hyperopt for i=18, sampler=Hyperband(R=50, η=3, inner=BOHB(dims=[UnorderedCategorical(5), Continuous(), Continuous()])),
         algorithm = [SimulatedAnnealing(), ParticleSwarm(), NelderMead(), BFGS(), NewtonTrustRegion()],
         a = LinRange(1,5,1800),

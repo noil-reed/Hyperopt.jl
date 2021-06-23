@@ -50,6 +50,7 @@ expected_result = [
 dims = [Continuous(), Categorical(10), UnorderedCategorical(10)]
 bws = [[0.01, 0.1, 1], [1, 0.2, 0.01], [0.02, 1, 1], [0.5, 0.5, 0.5]]
 
+# multi_kde = Hyperopt.MultivariateKDE(dims, data)
 @testset "multi_kde" begin
     result = Hyperopt.RealVectorVector()
     for bandwidth in bws
