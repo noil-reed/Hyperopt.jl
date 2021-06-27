@@ -42,7 +42,7 @@ end
 function init!(s::CLHSampler, ho)
     s.samples != zeros(0,0) && return # Already initialized
     all(zip(s.dims, ho.candidates)) do (d,c)
-        d isa Categorical || length(c) == ho.iterations
+        d isa CategoricalDim || length(c) == ho.iterations
     end || throw(ArgumentError("Latin hypercube sampling requires all candidate vectors for Continuous variables to have the same length as the number of iterations, got lengths $(repr.(collect(zip(ho.params, length.(ho.candidates)))))"))
     ndims = length(ho.candidates)
     initialSample = randomLHC(ho.iterations,s.dims)
@@ -392,16 +392,16 @@ function sample_potential_hyperparam(kde::MultivariateKDE, min_bandwidth, bw_fac
     for (_param, dim_type, _kde) in zip(param, kde.dims, kde.KDEs)
         bw = max(_kde.bandwidth, min_bandwidth)
         local ele
-        if dim_type isa Continuous
+        if dim_type isa ContinuousDim
             bw = bw*bw_factor
             ele = rand(TruncatedNormal(_param, bw, -_param/bw, (1-_param)/bw))
-        elseif dim_type isa Categorical
+        elseif dim_type isa CategoricalDim
             if rand() < (1-bw)
                 ele = _param
             else
                 ele = rand(1:dim_type.levels)
             end
-        elseif dim_type isa UnorderedCategorical
+        elseif dim_type isa UnorderedCategoricalDim
             if rand() < (1-bw)
                 ele = _param
             else
@@ -414,16 +414,6 @@ function sample_potential_hyperparam(kde::MultivariateKDE, min_bandwidth, bw_fac
         push!(sample, ele)
     end
     sample
-end
-
-function get_dict_candidates(dim_types::Vector{DimensionType}, candidates::Tuple)
-    dict_candidates = Dict{Int, Vector}()
-    for (i, dim_type, candidate) in zip(1:length(dim_types), dim_types, candidates)
-        if dim_type isa UnorderedCategorical && !(candidate[1] isa Real)
-            dict_candidates[i] = candidate
-        end
-    end
-    dict_candidates
 end
 
 # Get MultivariateKDE with min_bandwidth
@@ -439,7 +429,7 @@ function MultivariateKDE(dim_types::Vector{DimensionType}, records::Vector{Obser
         push!(observations, _observations)
     end
     # bws = [max(min_bandwidth, KernelDensity.default_bandwidth(observations[i, :])) for i in 1:size(observations)[1]]
-    candidates = get_dict_candidates(dim_types, candidates)
+    # candidates = get_dict_candidates(dim_types, candidates)
     multi_kde = MultivariateKDE(dim_types, observations, candidates)
     for i in 1:length(multi_kde.KDEs)
         if multi_kde.KDEs[i].bandwidth < min_bandwidth

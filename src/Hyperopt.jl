@@ -1,7 +1,7 @@
 module Hyperopt
 
 export Hyperoptimizer, @hyperopt, @phyperopt, @thyperopt, printmin, printmax
-export RandomSampler, BlueNoiseSampler, LHSampler, CLHSampler, Continuous, Categorical, UnorderedCategorical, GPSampler, Max, Min, Hyperband, BOHB
+export RandomSampler, BlueNoiseSampler, LHSampler, CLHSampler, GPSampler, Max, Min, Hyperband, BOHB
 
 using Base.Threads: threadid, nthreads
 using LinearAlgebra, Statistics, Random
@@ -16,10 +16,14 @@ using ThreadPools
 using Distributions: TruncatedNormal
 
 const HO_RNG = [MersenneTwister(rand(1:1000)) for _ in 1:nthreads()]
-const RealVector = Vector{Real}
-const RealVectorVector = Vector{Vector{Real}}
+# const RealVector = Vector{Real}
+# const RealVectorVector = Vector{Vector{Real}}
 const DimensionType = LHCDimension
-struct UnorderedCategorical <: DimensionType
+
+# Types of dimensions
+const CategoricalDim = Categorical
+const ContinuousDim = Continuous
+struct UnorderedCategoricalDim <: DimensionType
     levels::Int64
 end
 
