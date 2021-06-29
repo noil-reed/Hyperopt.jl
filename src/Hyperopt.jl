@@ -1,7 +1,7 @@
 module Hyperopt
 
 export Hyperoptimizer, @hyperopt, @phyperopt, @thyperopt, printmin, printmax
-export RandomSampler, BlueNoiseSampler, LHSampler, CLHSampler, GPSampler, Max, Min, Hyperband, BOHB
+export RandomSampler, BlueNoiseSampler, LHSampler, CLHSampler, GPSampler, Max, Min, Hyperband, BOHB, Continuous, Categorical, UnorderedCategorical
 
 using Base.Threads: threadid, nthreads
 using LinearAlgebra, Statistics, Random
