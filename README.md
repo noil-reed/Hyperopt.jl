@@ -230,11 +230,11 @@ bohb = @hyperopt for i=18, sampler=Hyperband(R=50, η=3, inner=BOHB(dims=[Hypero
     end
 ```
 
-### Empirical Result <sub><sup>[[code]](https://github.com/noil-reed/notebooks/blob/main/BOHB_demo/demo.ipynb)</sub></sup>
+<!-- ### Empirical Result <sub><sup>[[code]](https://github.com/noil-reed/notebooks/blob/main/BOHB_demo/demo.ipynb)</sub></sup>
 
 Empirical result of [Counting Ones](https://arxiv.org/abs/1807.01774), where x-axis is R and y-axis is regret. We run 10 experiments and take the average for each point in the fiture. 
 
-![Counting Ones](https://github.com/noil-reed/notebooks/blob/main/BOHB_demo/BOHB.svg)
+![Counting Ones](https://github.com/noil-reed/notebooks/blob/main/BOHB_demo/BOHB.svg) -->
 
 # Parallel execution
 - The macro `@phyperopt` works in the same way as `@hyperopt` but distributes all computation on available workers. The usual caveats apply, code must be loaded on all workers etc.
