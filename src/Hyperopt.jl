@@ -14,16 +14,16 @@ using LatinHypercubeSampling
 using BayesianOptimization, GaussianProcesses
 using ThreadPools
 using Distributions: TruncatedNormal
+using MultiKDE
 
 const HO_RNG = [MersenneTwister(rand(1:1000)) for _ in 1:nthreads()]
-# const RealVector = Vector{Real}
-# const RealVectorVector = Vector{Vector{Real}}
+
 const DimensionType = LHCDimension
 
-# Types of dimensions
-const CategoricalDim = Categorical
-const ContinuousDim = Continuous
-struct UnorderedCategoricalDim <: DimensionType
+# # Types of dimensions
+# const CategoricalDim = Categorical
+# const ContinuousDim = Continuous
+struct UnorderedCategorical <: DimensionType
     levels::Int64
 end
 
@@ -48,7 +48,6 @@ end
 
 Base.propertynames(ho::Hyperoptimizer) = (:minimum, :minimizer, :maximum, :maximizer, fieldnames(Hyperoptimizer)...)
 
-include("multi_lkde.jl")
 include("samplers.jl")
 
 function Hyperoptimizer(iterations::Int, sampler::Sampler = RandomSampler(); kwargs...)
@@ -137,7 +136,6 @@ end
 
 macro hyperopt(ex)
     pre = preprocess_expression(ex)
-    # print(pre)
     if pre[3].args[1] === :Hyperband
         costfun_ = hyperband_costfun(ex, pre...)
         ho_ = create_ho(pre[1:4]..., costfun_)

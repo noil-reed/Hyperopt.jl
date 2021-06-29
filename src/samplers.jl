@@ -42,7 +42,7 @@ end
 function init!(s::CLHSampler, ho)
     s.samples != zeros(0,0) && return # Already initialized
     all(zip(s.dims, ho.candidates)) do (d,c)
-        d isa CategoricalDim || length(c) == ho.iterations
+        d isa Categorical || length(c) == ho.iterations
     end || throw(ArgumentError("Latin hypercube sampling requires all candidate vectors for Continuous variables to have the same length as the number of iterations, got lengths $(repr.(collect(zip(ho.params, length.(ho.candidates)))))"))
     ndims = length(ho.candidates)
     initialSample = randomLHC(ho.iterations,s.dims)
@@ -326,10 +326,9 @@ Base.@kwdef mutable struct BOHB <: Sampler
     ## |D| of max_valid_budget
     N_b::Union{Int, Nothing} = nothing
     ## Good and bad kernel density estimator
-    KDE_good::Union{MultivariateKDE, Nothing} = nothing
-    KDE_bad::Union{MultivariateKDE, Nothing} = nothing
+    KDE_good::Union{MultiKDE.KDEMulti, Nothing} = nothing
+    KDE_bad::Union{MultiKDE.KDEMulti, Nothing} = nothing
 end
-
 
 # object call of BOHB sampler
 function (s::BOHB)(ho, iter)
@@ -345,7 +344,7 @@ function (s::BOHB)(ho, iter)
 end
 
 # Sample score l(x)/g(x), refers to line 6 of Algorithm2 in paper
-function score(sample::Vector, KDE_good::MultivariateKDE, KDE_bad::MultivariateKDE)
+function score(sample::Vector, KDE_good::MultiKDE.KDEMulti, KDE_bad::MultiKDE.KDEMulti)
     pdf(KDE_good, sample) / pdf(KDE_bad, sample)
 end
 
@@ -379,36 +378,37 @@ function update_KDEs(ho::Hyperoptimizer{Hyperband})
     sort_idx = sortperm(records, by=d->d.loss)
     idx_N_bl = sort_idx[begin:N_bl]
     idx_N_bg = reverse(sort_idx)[N_bg:end]
-    bohb.KDE_good = MultivariateKDE(bohb.dims, records[idx_N_bl], bohb.min_bandwidth, ho.candidates) 
-    bohb.KDE_bad = MultivariateKDE(bohb.dims, records[idx_N_bg], bohb.min_bandwidth, ho.candidates)
+    bohb.KDE_good = KDEMulti(bohb.dims, records[idx_N_bl], bohb.min_bandwidth, ho.candidates) 
+    bohb.KDE_bad = KDEMulti(bohb.dims, records[idx_N_bg], bohb.min_bandwidth, ho.candidates)
 end
 
-# sample from MultivariateKDE
-function sample_potential_hyperparam(kde::MultivariateKDE, min_bandwidth, bw_factor)
+# sample from KDEMulti
+function sample_potential_hyperparam(kde::MultiKDE.KDEMulti, min_bandwidth, bw_factor)
     idx = rand(1: size(kde.mat_observations)[2])
-    # param = kde.mat_observations[:, idx]
     param = [kde.observations[i][idx] for i in 1:length(kde.observations)]
     sample = Vector()
-    for (_param, dim_type, _kde) in zip(param, kde.dims, kde.KDEs)
+    for (_i, _param, dim_type, _kde) in zip(1:length(kde.dims), param, kde.dims, kde.KDEs)
         bw = max(_kde.bandwidth, min_bandwidth)
         local ele
-        if dim_type isa ContinuousDim
+        if dim_type isa MultiKDE.ContinuousDim
             bw = bw*bw_factor
             ele = rand(TruncatedNormal(_param, bw, -_param/bw, (1-_param)/bw))
-        elseif dim_type isa CategoricalDim
+        elseif dim_type isa MultiKDE.CategoricalDim
             if rand() < (1-bw)
                 ele = _param
             else
                 ele = rand(1:dim_type.levels)
             end
-        elseif dim_type isa UnorderedCategoricalDim
+        elseif dim_type isa MultiKDE.UnorderedCategoricalDim
             if rand() < (1-bw)
                 ele = _param
             else
                 ele = rand(1:dim_type.levels)
             end
+        else
+            error(string("Dim type ", string(dim_type), " not supported. "))
         end
-        if !(_kde.is_number)
+        if kde.mapped[_i]
             ele = kde.index_to_unordered[_kde][ele]
         end
         push!(sample, ele)
@@ -416,8 +416,11 @@ function sample_potential_hyperparam(kde::MultivariateKDE, min_bandwidth, bw_fac
     sample
 end
 
-# Get MultivariateKDE with min_bandwidth
-function MultivariateKDE(dim_types::Vector{DimensionType}, records::Vector{ObservationsRecord}, min_bandwidth::Real, candidates::Tuple)
+# Constructor extensions and adapters for MultiKDE.jl
+const DIMENSION_TYPE = Dict(Categorical=>MultiKDE.CategoricalDim, Continuous=>MultiKDE.ContinuousDim, UnorderedCategorical=>MultiKDE.UnorderedCategoricalDim)
+
+function MultiKDE.KDEMulti(dim_types::Vector{DimensionType}, records::Vector{ObservationsRecord}, min_bandwidth::Real, candidates::Tuple)
+    # Get KDEMulti with min_bandwidth
     dim = records[1].dim
     observations = Vector{Vector}()
     for record in records
@@ -430,11 +433,25 @@ function MultivariateKDE(dim_types::Vector{DimensionType}, records::Vector{Obser
     end
     # bws = [max(min_bandwidth, KernelDensity.default_bandwidth(observations[i, :])) for i in 1:size(observations)[1]]
     # candidates = get_dict_candidates(dim_types, candidates)
-    multi_kde = MultivariateKDE(dim_types, observations, candidates)
+    multi_kde = KDEMulti(dim_types, observations, candidates)
     for i in 1:length(multi_kde.KDEs)
         if multi_kde.KDEs[i].bandwidth < min_bandwidth
             multi_kde.KDEs[i].bandwidth = min_bandwidth
         end
     end
     multi_kde
+end
+
+function MultiKDE.KDEMulti(dims::Vector{DimensionType}, observations::Vector, candidates::Tuple)
+    dims = Vector{MultiKDE.DimensionType}([DIMENSION_TYPE[typeof(dim)] === MultiKDE.ContinuousDim ? DIMENSION_TYPE[typeof(dim)]() : 
+                                            DIMENSION_TYPE[typeof(dim)](dim.levels) for dim in dims])
+    MultiKDE.KDEMulti(dims, observations, candidates)
+end
+
+function Base.getproperty(dim_type::Union{MultiKDE.CategoricalDim, MultiKDE.UnorderedCategoricalDim}, v::Symbol)
+    if v == :levels
+        getfield(dim_type, :level)
+    else
+        getfield(dim_type, v)
+    end
 end
